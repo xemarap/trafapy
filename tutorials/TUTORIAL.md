@@ -9,7 +9,7 @@ Trafapy is a Python wrapper for the Trafikanalys API, which provides access to c
 ## Installation
 
 ```bash
-pip install trafapy
+pip install git+https://github.com/xemarap/trafapy.git
 ```
 
 ## Basic Setup
