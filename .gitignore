@@ -168,6 +168,9 @@ cython_debug/
 interactive.py
 Makefile
 .github
+test_my_functionality.py
+test_real_api.py
+
 
 # Data files that might be generated during testing
 *.csv
