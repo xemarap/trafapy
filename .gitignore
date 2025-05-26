@@ -165,12 +165,12 @@ cython_debug/
 # Cache directories (as defined in cache_utils.py)
 .trafapy_cache/
 *_cache/
+# Scripts/files
 interactive.py
 Makefile
 .github
-test_my_functionality.py
-test_real_api.py
-
+tests/test_real_api.py
+tests/test_my_functionality.py
 
 # Data files that might be generated during testing
 *.csv
