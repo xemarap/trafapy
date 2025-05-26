@@ -26,11 +26,9 @@ These dependencies are automatically installed when you install TrafaPy.
 ```python
 from trafapy import TrafikanalysClient
 
-# Initialize client with caching enabled
+# Initialize client
 trafa = TrafikanalysClient(
     language="sv",           # 'sv' for Swedish, 'en' for English  
-    cache_enabled=True,      # Enable caching for better performance
-    debug=False              # Set to True for detailed logging
 )
 
 # Find available datasets
@@ -71,7 +69,7 @@ df = trafa.get_data_as_dataframe(product_code, query)
 - **Smart Caching**: Automatic response caching with configurable expiry
 - **Error Handling**: Robust error management and fallback options
 - **Debug Mode**: Detailed logging for troubleshooting
-- **Rate Limiting**: Built-in protection against API limits
+- **Rate Limiting**: Built-in and configurable protection against API limits
 
 ### 🛠️ **Developer Experience**
 - **Type Hints**: Full type annotation support
@@ -156,21 +154,7 @@ query = trafa.build_query(
 df = trafa.get_data_as_dataframe("t10026", query)
 ```
 
-## Cache Management
-
-```python
-# Check cache status
-cache_info = trafa.get_cache_info()
-print(f"Cache files: {cache_info['file_count']}")
-print(f"Cache size: {cache_info['total_size_mb']} MB")
-print(f"Cache location: {cache_info['cache_dir']}")
-
-# Clear cache
-deleted_count = trafa.clear_cache()  # Clear all
-deleted_count = trafa.clear_cache(older_than_seconds=3600)  # Clear files older than 1 hour
-```
-
-## Error Handling
+### Error handling
 
 ```python
 try:
@@ -187,19 +171,76 @@ except Exception as e:
     print("Available variables:", variables['name'].tolist())
 ```
 
-## Configuration Options
+
+## Responsible API use
+
+TrafaPy follows Trafikanalys guidelines for responsible API usage. Trafikanalys strongly recommends using caching to reduce unnecessary API load.
+
+### Configuration Options
 
 ```python
-from trafapy import TrafikanalysClient, DEFAULT_CACHE_DIR
-
+# Recommended production configuration
 trafa = TrafikanalysClient(
-    language="sv",                    # Response language ('sv' or 'en')
-    debug=True,                       # Enable debug logging
-    cache_enabled=True,               # Enable response caching
-    cache_dir=DEFAULT_CACHE_DIR,      # Cache directory location  
-    cache_expiry_seconds=1800         # Cache expiry (30 minutes)
+    cache_enabled=True,        # Enable caching
+    rate_limit_enabled=True,   # Enable rate limiting
+    calls_per_second=1.0,      # Balanced rate
+    burst_size=5,              # Allow interactive bursts
+    enable_retry=True,         # Handle errors gracefully
+    debug=False                # Clean logs in production
 )
 ```
+
+### Cache Management
+
+```python
+# Enable caching for better performance and API courtesy
+trafa = TrafikanalysClient(cache_enabled=True)
+
+# Check cache status
+cache_info = trafa.get_cache_info()
+print(f"Cache files: {cache_info['file_count']}")
+print(f"Cache size: {cache_info['total_size_mb']} MB")
+print(f"Cache location: {cache_info['cache_dir']}")
+
+# Clear cache
+deleted_count = trafa.clear_cache()  # Clear all
+deleted_count = trafa.clear_cache(older_than_seconds=3600)  # Clear files older than 1 hour
+```
+
+### Rate Limiting
+
+TrafaPy includes built-in rate limiting to protect the Trafikanalys API from overload and ensure reliable access for all users.
+
+
+#### Configure Rate Limiting
+
+Rate limiting is enabled by default to protect the API. You can adjust settings:
+
+```python
+# Change rate limiting settings
+trafa.configure_rate_limiting(
+    enabled=True,
+    calls_per_second=2.0,      # Increase rate for bulk operations
+    burst_size=10,             # Allow larger bursts
+    enable_retry=True
+)
+
+# Check current settings
+rate_info = trafa.get_rate_limit_info()
+print(f"Rate: {rate_info['calls_per_second']} calls/sec")
+
+# Disable rate limiting (use with caution)
+trafa.configure_rate_limiting(enabled=False)
+```
+
+#### Rate Limiting Settings
+
+| Setting | Description | Recommended Values |
+|---------|-------------|-------------------|
+| `calls_per_second` | Base rate limit | `0.5-2.0` depending on use case |
+| `burst_size` | Quick calls allowed | `3-10` for responsive interaction |
+| `enable_retry` | Automatic retry on errors | `True` (recommended) |
+
 
 ## API Reference
 

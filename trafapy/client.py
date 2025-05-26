@@ -1,23 +1,159 @@
-
 import requests
 import pandas as pd
 import logging
+import time
 from typing import Dict, List, Union, Optional, Any
+from functools import wraps
 
 from .cache_utils import APICache, cached_api_request, DEFAULT_CACHE_DIR
 
 logger = logging.getLogger(__name__)
 
+def rate_limit(calls_per_second: float = 1.0):
+    """
+    Decorator to rate limit function calls.
+    
+    Args:
+        calls_per_second: Maximum number of calls per second allowed
+    """
+    min_interval = 1.0 / calls_per_second
+    last_called = [0.0]
+    
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            elapsed = time.time() - last_called[0]
+            left_to_wait = min_interval - elapsed
+            if left_to_wait > 0:
+                if len(args) > 0 and hasattr(args[0], 'debug') and args[0].debug:
+                    print(f"Rate limiting: waiting {left_to_wait:.2f} seconds")
+                time.sleep(left_to_wait)
+            
+            result = func(*args, **kwargs)
+            last_called[0] = time.time()
+            return result
+        return wrapper
+    return decorator
+
+
+class RateLimiter:
+    """
+    Advanced rate limiter with burst support and backoff strategies.
+    """
+    
+    def __init__(self, calls_per_second: float = 1.0, burst_size: int = 5, 
+                 backoff_factor: float = 2.0, max_retries: int = 3):
+        """
+        Initialize rate limiter.
+        
+        Args:
+            calls_per_second: Base rate limit (calls per second)
+            burst_size: Number of calls allowed in a burst
+            backoff_factor: Exponential backoff multiplier for retries
+            max_retries: Maximum number of retry attempts
+        """
+        self.calls_per_second = calls_per_second
+        self.burst_size = burst_size
+        self.backoff_factor = backoff_factor
+        self.max_retries = max_retries
+        
+        # Sliding window for burst control
+        self.call_times = []
+        self.min_interval = 1.0 / calls_per_second
+        
+    def wait_if_needed(self, debug: bool = False):
+        """
+        Wait if rate limit would be exceeded.
+        
+        Args:
+            debug: Whether to print debug information
+        """
+        current_time = time.time()
+        
+        # Clean old calls (older than 1 second for burst window)
+        self.call_times = [t for t in self.call_times if current_time - t < 1.0]
+        
+        # Check burst limit
+        if len(self.call_times) >= self.burst_size:
+            sleep_time = 1.0 - (current_time - self.call_times[0])
+            if sleep_time > 0:
+                if debug:
+                    print(f"Burst limit reached: waiting {sleep_time:.2f} seconds")
+                time.sleep(sleep_time)
+                current_time = time.time()
+        
+        # Check base rate limit
+        if self.call_times:
+            time_since_last = current_time - self.call_times[-1]
+            if time_since_last < self.min_interval:
+                sleep_time = self.min_interval - time_since_last
+                if debug:
+                    print(f"Rate limit: waiting {sleep_time:.2f} seconds")
+                time.sleep(sleep_time)
+                current_time = time.time()
+        
+        # Record this call
+        self.call_times.append(current_time)
+    
+    def execute_with_retry(self, func, *args, debug: bool = False, **kwargs):
+        """
+        Execute a function with rate limiting and exponential backoff retry.
+        
+        Args:
+            func: Function to execute
+            *args: Function arguments
+            debug: Whether to print debug information
+            **kwargs: Function keyword arguments
+            
+        Returns:
+            Function result
+            
+        Raises:
+            Exception: If all retries are exhausted
+        """
+        for attempt in range(self.max_retries + 1):
+            try:
+                self.wait_if_needed(debug)
+                return func(*args, **kwargs)
+                
+            except requests.exceptions.RequestException as e:
+                if attempt == self.max_retries:
+                    raise e
+                
+                # Check if it's a rate limit error (HTTP 429)
+                if hasattr(e, 'response') and e.response is not None:
+                    if e.response.status_code == 429:
+                        # Rate limited - wait longer
+                        wait_time = (self.backoff_factor ** attempt) * 2
+                        if debug:
+                            print(f"Rate limited (HTTP 429): waiting {wait_time:.2f} seconds before retry {attempt + 1}")
+                        time.sleep(wait_time)
+                        continue
+                    elif e.response.status_code >= 500:
+                        # Server error - retry with backoff
+                        wait_time = self.backoff_factor ** attempt
+                        if debug:
+                            print(f"Server error ({e.response.status_code}): waiting {wait_time:.2f} seconds before retry {attempt + 1}")
+                        time.sleep(wait_time)
+                        continue
+                
+                # For other errors, re-raise immediately
+                raise e
+
+
 class TrafikanalysClient:
     """
     Simplified client for the Trafikanalys API focused on retrieving data using known queries.
+    Includes rate limiting capabilities.
     """
     
     BASE_URL = "https://api.trafa.se/api"
     
     def __init__(self, language: str = "sv", debug: bool = False, 
                  cache_enabled: bool = False, cache_dir: str = DEFAULT_CACHE_DIR,
-                 cache_expiry_seconds: int = 1800):  # Default: 30 minutes
+                 cache_expiry_seconds: int = 1800,  # Default: 30 minutes
+                 rate_limit_enabled: bool = True, calls_per_second: float = 1.0,
+                 burst_size: int = 5, enable_retry: bool = True):
         """
         Initialize the client.
         
@@ -27,6 +163,10 @@ class TrafikanalysClient:
             cache_enabled: Whether to use caching
             cache_dir: Directory to store cache files
             cache_expiry_seconds: Cache expiry time in seconds
+            rate_limit_enabled: Whether to enable rate limiting
+            calls_per_second: Maximum API calls per second
+            burst_size: Number of calls allowed in a burst
+            enable_retry: Whether to enable automatic retries with backoff
         """
         self.language = language
         self.debug = debug
@@ -36,10 +176,21 @@ class TrafikanalysClient:
             expiry_seconds=cache_expiry_seconds,
             enabled=cache_enabled
         )
+        
+        # Rate limiting configuration
+        self.rate_limit_enabled = rate_limit_enabled
+        if rate_limit_enabled:
+            self.rate_limiter = RateLimiter(
+                calls_per_second=calls_per_second,
+                burst_size=burst_size,
+                max_retries=3 if enable_retry else 0
+            )
+        else:
+            self.rate_limiter = None
     
-    def _make_request(self, url: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _make_request_raw(self, url: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Make an HTTP request and return the response as JSON.
+        Make an HTTP request without rate limiting (internal use).
         
         Args:
             url: Request URL
@@ -54,10 +205,84 @@ class TrafikanalysClient:
             if self.debug:
                 print(f"Request failed with status code {response.status_code}")
                 print(f"Response text: {response.text}")
+            
+            # Raise exception for rate limiter to handle
+            if response.status_code == 429:
+                raise requests.exceptions.RequestException(f"Rate limited (HTTP 429)", response=response)
+            elif response.status_code >= 500:
+                raise requests.exceptions.RequestException(f"Server error ({response.status_code})", response=response)
+            
             return {}
         
         return response.json()
     
+    def _make_request(self, url: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Make an HTTP request with rate limiting and retry logic.
+        
+        Args:
+            url: Request URL
+            params: Request parameters
+            
+        Returns:
+            Response JSON data
+        """
+        if self.rate_limit_enabled and self.rate_limiter:
+            return self.rate_limiter.execute_with_retry(
+                self._make_request_raw, url, params, debug=self.debug
+            )
+        else:
+            return self._make_request_raw(url, params)
+    
+    def configure_rate_limiting(self, enabled: bool = True, calls_per_second: float = 1.0,
+                              burst_size: int = 5, enable_retry: bool = True):
+        """
+        Configure rate limiting settings.
+        
+        Args:
+            enabled: Whether to enable rate limiting
+            calls_per_second: Maximum API calls per second
+            burst_size: Number of calls allowed in a burst
+            enable_retry: Whether to enable automatic retries with backoff
+        """
+        self.rate_limit_enabled = enabled
+        if enabled:
+            self.rate_limiter = RateLimiter(
+                calls_per_second=calls_per_second,
+                burst_size=burst_size,
+                max_retries=3 if enable_retry else 0
+            )
+            if self.debug:
+                print(f"Rate limiting configured: {calls_per_second} calls/sec, burst={burst_size}, retry={enable_retry}")
+        else:
+            self.rate_limiter = None
+            if self.debug:
+                print("Rate limiting disabled")
+    
+    def get_rate_limit_info(self) -> Dict[str, Any]:
+        """
+        Get current rate limiting configuration.
+        
+        Returns:
+            Dictionary with rate limiting information
+        """
+        if not self.rate_limit_enabled or not self.rate_limiter:
+            return {
+                "enabled": False,
+                "calls_per_second": 0,
+                "burst_size": 0,
+                "recent_calls": 0
+            }
+        
+        return {
+            "enabled": True,
+            "calls_per_second": self.rate_limiter.calls_per_second,
+            "burst_size": self.rate_limiter.burst_size,
+            "recent_calls": len(self.rate_limiter.call_times),
+            "backoff_factor": self.rate_limiter.backoff_factor,
+            "max_retries": self.rate_limiter.max_retries
+        }
+     
     def list_products(self) -> pd.DataFrame:
         """
         List all available products.
