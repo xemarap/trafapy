@@ -6,7 +6,8 @@ This document provides comprehensive information about testing the TrafaPy libra
 
 TrafaPy has a comprehensive test suite that includes:
 
-- **Unit Tests**: Test individual components in isolation using mocks (53 tests)
+- **Unit Tests**: Test individual components in isolation using mocks (53+ tests)
+- **Rate Limiting Tests**: Test API rate limiting and retry mechanisms (26 tests)
 - **Integration Tests**: Test real API interactions (use sparingly)
 - **Performance Tests**: Test caching and performance optimizations
 - **Error Handling Tests**: Test edge cases and error scenarios
@@ -20,6 +21,7 @@ tests/
 ├── conftest.py                 # Shared test fixtures and configuration
 ├── test_trafapy.py            # Core functionality tests (25 tests)
 ├── test_convenience.py         # Advanced features tests (28 tests)
+├── test_rate_limiting.py       # Rate limiting functionality tests (26 tests)
 └── run_tests.py               # Custom test runner script
 ```
 
@@ -49,6 +51,12 @@ python tests/run_tests.py --unit --verbose
 
 # Run with coverage reporting
 pytest -m "not integration" --cov=trafapy --cov-report=term-missing
+
+# Run rate limiting tests specifically
+pytest tests/test_rate_limiting.py -v
+
+# Run fast unit tests only (excludes performance tests)
+pytest -m "not integration and not slow" -v
 ```
 
 ## 🧪 Test Categories
@@ -62,23 +70,70 @@ Unit tests are fast, reliable, and don't require network access. They use mockin
 pytest -m "not integration" -v
 
 # Run specific test categories
-pytest -k "cache" -v          # Cache-related tests
-pytest -k "client" -v         # Client functionality tests
-pytest -k "query" -v          # Query building tests
+pytest -k "cache" -v              # Cache-related tests
+pytest -k "client" -v             # Client functionality tests
+pytest -k "query" -v              # Query building tests
+pytest -k "rate_limit" -v         # Rate limiting tests
+pytest tests/test_rate_limiting.py -v  # All rate limiting tests
+
+# Run specific rate limiting test classes
+pytest tests/test_rate_limiting.py::TestRateLimiter -v
+pytest tests/test_rate_limiting.py::TestTrafikanalysClientRateLimiting -v
 ```
 
 **What they test:**
 - Query building logic and parameter handling
 - Data processing and DataFrame conversion
 - Cache functionality (save, retrieve, expire)
+- Rate limiting and retry mechanisms
 - Error handling and edge cases
 - Utility and convenience functions
 - Mock API response processing
+- API call timing and burst control
 
 **Expected results:**
 - ✅ All tests should pass
 - ⚡ Complete in under 10 seconds
 - 🔒 No network requests to external APIs
+
+### Rate Limiting Tests
+
+Test the API rate limiting functionality to ensure responsible API usage:
+
+```bash
+# Run all rate limiting tests
+pytest tests/test_rate_limiting.py -v
+
+# Run specific rate limiting test categories
+pytest tests/test_rate_limiting.py::TestRateLimiter -v           # Core rate limiter logic
+pytest tests/test_rate_limiting.py::TestTrafikanalysClientRateLimiting -v  # Client integration
+pytest tests/test_rate_limiting.py::TestRateLimitingEdgeCases -v # Edge cases and errors
+
+# Run performance-sensitive rate limiting tests
+pytest tests/test_rate_limiting.py::TestRateLimitingPerformance -v
+
+# Test rate limiting with different scenarios
+pytest -k "rate_limit and retry" -v      # Retry mechanism tests
+pytest -k "rate_limit and burst" -v      # Burst limiting tests
+```
+
+**What they test:**
+- **Rate Limiting Logic**: Ensures API calls are properly spaced
+- **Burst Limiting**: Tests quick successive calls within burst limits
+- **Retry Mechanisms**: Tests exponential backoff for rate limit errors (HTTP 429)
+- **Server Error Handling**: Tests retry behavior for 5xx errors
+- **Client Integration**: Verifies rate limiting works with TrafikanalysClient
+- **Configuration**: Tests dynamic rate limit configuration
+- **Edge Cases**: Tests invalid parameters and extreme scenarios
+- **Performance**: Tests timing accuracy and memory usage
+
+**Expected results:**
+- ✅ All rate limiting logic functions correctly
+- ⚡ Timing tests pass within tolerance (some may be slower due to actual delays)
+- 🔄 Retry mechanisms work for appropriate error types
+- 📊 Performance tests validate efficient operation
+
+**Note**: Rate limiting tests include actual timing delays, so they may take longer than other unit tests (up to 30 seconds total).
 
 ### Integration Tests (Use Sparingly)
 
@@ -111,8 +166,14 @@ Test caching efficiency, memory usage, and concurrent access:
 # Run performance-related tests
 pytest -k "performance or cache" -v
 
+# Run rate limiting performance tests
+pytest tests/test_rate_limiting.py::TestRateLimitingPerformance -v
+
 # Run tests for large datasets
 pytest -k "large_dataset" -v
+
+# Test caching performance
+pytest -k "cache and performance" -v
 ```
 
 ## ⚙️ Test Configuration
@@ -124,14 +185,14 @@ pytest -k "large_dataset" -v
 testpaths = tests
 markers =
     integration: marks tests as integration tests (may hit real API)
-    slow: marks tests as slow running tests
+    slow: marks tests as slow running tests (includes rate limiting timing tests)
     unit: marks tests as unit tests
 ```
 
 ### Custom Markers
 
 - `@pytest.mark.integration`: Tests that make real API calls
-- `@pytest.mark.slow`: Tests that take significant time (>2 seconds)
+- `@pytest.mark.slow`: Tests that take significant time (>2 seconds, includes rate limiting timing tests)
 - `@pytest.mark.unit`: Pure unit tests (default, no marker needed)
 
 ### Running Specific Tests
@@ -139,18 +200,23 @@ markers =
 ```bash
 # Run specific test file
 pytest tests/test_trafapy.py -v
+pytest tests/test_rate_limiting.py -v
 
 # Run specific test class
 pytest tests/test_trafapy.py::TestTrafikanalysClient -v
+pytest tests/test_rate_limiting.py::TestRateLimiter -v
 
-# Run specific test method
+# Run specific test method  
 pytest tests/test_trafapy.py::TestAPICache::test_cache_initialization -v
+pytest tests/test_rate_limiting.py::TestRateLimiter::test_wait_if_needed_rate_limiting -v
 
 # Run tests matching a pattern
 pytest -k "build_query" -v
+pytest -k "rate_limit" -v
 
 # Exclude specific tests
 pytest -k "not cache_warming_strategy" -v
+pytest -k "not slow" -v  # Skip slow timing tests
 ```
 
 ## 📊 Coverage Reports
@@ -172,12 +238,14 @@ python tests/run_tests.py --coverage-report
 - **Overall coverage**: >90%
 - **Core modules**: >95%
 - **Critical paths**: 100%
+- **Rate limiting module**: >95%
 
 The HTML report (`htmlcov/index.html`) shows:
 - Line-by-line coverage visualization
 - Untested code paths
 - Branch coverage information
 - Missing test areas
+- Rate limiting code coverage details
 
 ## 🔧 Test Runner Usage
 
@@ -244,20 +312,27 @@ class TestNewFeature:
 ### Mocking Examples
 
 ```python
-# Mock API responses
+# Mock API responses  
 @patch('trafapy.client.TrafikanalysClient._make_request')
 def test_list_products(mock_request):
     mock_request.return_value = {"StructureItems": [...]}
     # Test logic here
 
 # Mock specific methods
-@patch.object(client, 'explore_product_variables')
+@patch.object(client, 'explore_product_variables')  
 def test_build_query(mock_explore):
     mock_explore.return_value = pd.DataFrame([...])
     # Test logic here
 
 # Mock with side effects
 mock_request.side_effect = [response1, response2, response3]
+
+# Mock rate limiting for testing
+@patch.object(client.rate_limiter, 'wait_if_needed')
+def test_without_actual_delays(mock_wait):
+    """Test rate limiting logic without actual time delays."""
+    mock_wait.return_value = None  # Skip actual waiting
+    # Test the logic without time delays
 ```
 
 ### Adding Integration Tests
@@ -276,6 +351,29 @@ def test_real_api_functionality():
         assert len(result) > 0
     except Exception as e:
         pytest.skip(f"API test failed (normal): {e}")
+```
+
+### Rate Limiting Test Examples
+
+```python
+# Test with rate limiting enabled
+def test_rate_limited_functionality():
+    """Test functionality with rate limiting enabled."""
+    client = TrafikanalysClient(
+        rate_limit_enabled=True,
+        calls_per_second=2.0,
+        burst_size=5,
+        debug=True  # For testing/debugging
+    )
+    
+    # Test that rate limiting doesn't break functionality
+    result = client.list_products() 
+    assert isinstance(result, pd.DataFrame)
+    
+    # Check rate limiting info
+    rate_info = client.get_rate_limit_info()
+    assert rate_info['enabled'] is True
+    assert rate_info['calls_per_second'] == 2.0
 ```
 
 ## 🔄 Continuous Integration
