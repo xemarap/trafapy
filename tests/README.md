@@ -511,6 +511,21 @@ python tests/run_tests.py --all --lint --coverage
 6. **Add appropriate markers** for new test types
 7. **Use descriptive test and commit messages**
 
+## Dependency Licenses
+
+TrafaPy includes the following dependencies:
+
+**Runtime Dependencies:**
+- requests
+- pandas
+
+**Development/Testing Dependencies (not distributed):**
+- pytest
+- pytest-cov
+- pytest-mock
+
+All dependency licenses are available in the `LICENSES/` directory.
+
 ---
 
 ## 📞 Support

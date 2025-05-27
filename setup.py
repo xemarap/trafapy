@@ -10,7 +10,6 @@ setup(
     install_requires=[
         "requests>=2.25.0",
         "pandas>=1.0.0",
-        "numpy>=1.19.0",
     ],
     author="Emanuel Raptis",
     description="A Python wrapper for the Trafikanalys API",

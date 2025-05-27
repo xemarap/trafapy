@@ -17,7 +17,6 @@ TrafaPy requires Python 3.7+ and the following dependencies:
 
 - requests (≥2.25.0) - HTTP library for API communication
 - pandas (≥1.0.0) - Data manipulation and analysis
-- numpy (≥1.19.0) - Numerical computing support
 
 These dependencies are automatically installed when you install TrafaPy.
 
@@ -28,7 +27,8 @@ from trafapy import TrafikanalysClient
 
 # Initialize client
 trafa = TrafikanalysClient(
-    language="sv",           # 'sv' for Swedish, 'en' for English  
+    rate_limit_enabled=True,    # 'True' is default
+    cache_enabled=True          # 'False' as default, but it is recommended to enable
 )
 
 # Find available datasets
@@ -264,13 +264,19 @@ Contributions are welcome! Please feel free to submit issues, feature requests, 
 MIT License - see LICENSE file for details.
 
 ## Dependency Licenses
-TrafaPy includes the following third-party dependencies with their respective licenses:
 
+TrafaPy includes the following dependencies:
+
+**Runtime Dependencies:**
 - requests
 - pandas
-- numpy
 
-All dependency licenses are included in the `LICENSES/` directory for reference and compliance purposes.
+**Development/Testing Dependencies (not distributed):**
+- pytest
+- pytest-cov
+- pytest-mock
+
+All dependency licenses are available in the `LICENSES/` directory.
 
 ## Links
 

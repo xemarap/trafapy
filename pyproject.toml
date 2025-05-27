@@ -30,7 +30,6 @@ keywords = ["trafikanalys", "api", "statistics", "sweden", "transport", "traffic
 dependencies = [
     "requests>=2.25.0",
     "pandas>=1.0.0",
-    "numpy>=1.19.0",
 ]
 requires-python = ">=3.7"
 
@@ -39,17 +38,12 @@ test = [
     "pytest>=6.0",
     "pytest-cov>=2.0",
     "pytest-mock>=3.0",
-    "responses>=0.18.0",
+    
 ]
 dev = [
     "pytest>=6.0",
     "pytest-cov>=2.0",
     "pytest-mock>=3.0",
-    "responses>=0.18.0",
-    "black>=22.0",
-    "flake8>=4.0",
-    "mypy>=0.910",
-    "pre-commit>=2.15.0",
 ]
 
 [project.urls]
@@ -141,7 +135,6 @@ strict_equality = true
 [[tool.mypy.overrides]]
 module = [
     "pandas.*",
-    "numpy.*",
     "requests.*",
 ]
 ignore_missing_imports = true

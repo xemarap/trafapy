@@ -19,7 +19,8 @@ from trafapy import TrafikanalysClient
 
 # Create a client
 trafa = TrafikanalysClient(
-    language="sv",          # 'sv' for Swedish, 'en' for English
+    rate_limit_enabled=True,    # 'True' is default
+    cache_enabled=True          # 'False' as default, but it is recommended to enable
 )
 ```
 
@@ -160,6 +161,40 @@ query = trafa.build_query(product_code, ar=['2023'], reglan=['01'])
 
 ### 4. Handle Large Datasets
 For large queries, consider chunking by year or region.
+
+### Rate Limiting
+
+TrafaPy includes built-in rate limiting to protect the Trafikanalys API from overload and ensure reliable access for all users.
+
+#### Configure Rate Limiting
+
+Rate limiting is enabled by default to protect the API. You can adjust settings:
+
+```python
+# Change rate limiting settings
+trafa.configure_rate_limiting(
+    enabled=True,
+    calls_per_second=2.0,      # Increase rate for bulk operations
+    burst_size=10,             # Allow larger bursts
+    enable_retry=True
+)
+
+# Check current settings
+rate_info = trafa.get_rate_limit_info()
+print(f"Rate: {rate_info['calls_per_second']} calls/sec")
+
+# Disable rate limiting (use with caution)
+trafa.configure_rate_limiting(enabled=False)
+```
+
+#### Rate Limiting Settings
+
+| Setting | Description | Recommended Values |
+|---------|-------------|-------------------|
+| `calls_per_second` | Base rate limit | `0.5-2.0` depending on use case |
+| `burst_size` | Quick calls allowed | `3-10` for responsive interaction |
+| `enable_retry` | Automatic retry on errors | `True` (recommended) |
+
 
 ### 5. Explore Before Querying
 Always explore variables and options first:
