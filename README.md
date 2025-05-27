@@ -2,6 +2,9 @@
 
 A comprehensive Python package for accessing and analyzing Swedish transport statistics through the Trafikanalys API.
 
+[![Python Versions](https://img.shields.io/badge/python-3.7%20%7C%203.8%20%7C%203.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](#)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 ## Overview
 
 TrafaPy provides an intuitive interface to explore and retrieve data from Sweden's official transport statistics database. Whether you're researching vehicle registrations, traffic patterns, accidents, or transport trends, TrafaPy makes it easy to access and analyze this rich datasource.
