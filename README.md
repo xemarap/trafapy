@@ -170,7 +170,8 @@ TrafaPy automatically handles large queries that would otherwise fail due to URL
 query = trafa.build_query(
     product_code="t10026",
     ar='all',                        # All available years (20+ values)
-    regkom=stockholm_munis,          # All Stockholm municipalities (50+ values)
+    reglan='all',                    # All counties
+    regkom='all',          # All municipalities (290+ values)
     drivmedel='all',                 # All fuel types (10+ values)
     nyregunder=''
 )
