@@ -116,8 +116,8 @@ regions = trafa.explore_variable_options(product_code, "reglan")
 query = trafa.build_query(
     product_code="t10026",
     ar=['2020', '2021', '2022'],     # Specific years
-    drivmedel=['102', '103'],        # Diesel and electric
     reglan=['01', '03'],             # Stockholm and Uppsala County
+    drivmedel=['102', '103'],        # Diesel and electric
     nyregunder=''                    # New registrations measure
 )
 
@@ -125,8 +125,8 @@ query = trafa.build_query(
 query = trafa.build_query(
     product_code="t10026", 
     ar='all',                        # All available years
-    drivmedel='all',                 # All fuel types
     reglan=['01'],                   # Specific region
+    drivmedel='all',                 # All fuel types
     nyregunder=''
 )
 

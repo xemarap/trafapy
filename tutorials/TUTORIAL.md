@@ -98,9 +98,9 @@ print(df.head())
 # Get car data by fuel type for multiple years
 query = trafa.build_query(
     product_code,
-    ar=['2020', '2021', '2022', '2023'],  # Multiple years
-    drivmedel='all',                       # All fuel types
+    ar=['2020', '2021', '2022', '2023'],   # Multiple years
     reglan=['01'],                         # Stockholm County
+    drivmedel='all',                       # All fuel types
     nyregunder=''                          # New registrations
 )
 
@@ -149,8 +149,8 @@ print(f"✅ Successfully retrieved {len(df):,} rows!")
   📋 Batching variable 'regkom' (52 values)
   ✅ Created 3 batches (max 50 values per variable)
   🔄 Processing batch 1/3... ✅ 1,250 rows
-  🔄 Processing batch 2/3... ✅ 987 rows  
-  🔄 Processing batch 3/3... ✅ 423 rows
+  🔄 Processing batch 2/3... ✅ 1,250 rows  
+  🔄 Processing batch 3/3... ✅ 160 rows
   🔗 Combining data from 3 successful batches... ✅
 ✅ Batch processing complete! Retrieved 2,660 total rows
 ```
@@ -227,7 +227,8 @@ Don't worry about query size - let Trafapy's automatic batching handle it:
 query = trafa.build_query(
     product_code,
     ar='all',               # Let batching handle this
-    regkom='all',           # And this
+    reglan='all',           # And this
+    regkom='all',           # This as well
     drivmedel='all'         # And this too!
 )
 df = trafa.get_data_as_dataframe(product_code, query)
@@ -329,9 +330,9 @@ product_code = "t10026"
 ev_query = trafa.build_query(
     product_code,
     ar='all',                   # All available years
-    drivmedel=['103'],          # Electric vehicles only
     reglan='all',               # All counties
     regkom='all',               # All municipalities
+    drivmedel=['103'],          # Electric vehicles only
     nyregunder=''               # New registrations
 )
 
