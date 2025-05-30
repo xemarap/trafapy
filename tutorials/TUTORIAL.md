@@ -197,6 +197,8 @@ trafa.configure_rate_limiting(enabled=False)
 
 
 ### 5. Explore Before Querying
+For a list with possible API calls and structures for each dataproduct, please visit [Trafikanalys API Documentation](https://www.trafa.se/sidor/api-dokumentation/)
+
 Always explore variables and options first:
 ```python
 # 1. List products
@@ -206,7 +208,11 @@ Always explore variables and options first:
 # 5. Fetch data
 ```
 
-For a list with possible API calls and structures for each dataproduct, please visit [Trafikanalys API Documentation](https://www.trafa.se/sidor/api-dokumentation/)
+### 6. Use Debug Mode When Stuck
+Enable debug mode to understand what's happening:
+```python
+trafa = TrafikanalysClient(debug=True)
+```
 
 ## Common Product Codes
 
@@ -243,6 +249,34 @@ except Exception as e:
     # Check if product code and variables are correct
     variables = trafa.explore_product_variables(product_code)
     print("Available variables:", variables['name'].tolist())
+```
+
+## Debugging and Troubleshooting
+When things don't work as expected, TrafaPy's debug mode is your best friend! Enable it to see exactly what's happening behind the scenes.
+
+### Enable Debug Mode
+```python
+# Create client with debug mode enabled
+trafa = TrafikanalysClient(debug=True)  # Enable detailed logging
+```
+What does debug show?
+
+- API request URLs being made
+- Cache hits and misses  
+- Response structure details
+- Number of rows/columns received
+- Rate limiting delays
+
+Sample debug output:
+```html
+Making request to: https://api.trafa.se/api/structure?lang=sv
+Got 45 products from API
+Making request to: https://api.trafa.se/api/structure?query=t10026&lang=sv
+API response structure: ['StructureItems', 'DataCount', 'ValidatedRequestType']
+Found product: Personbilar
+Processing 25 rows
+Processed 25 rows
+Columns in first row: ['ar', 'reglan', 'drivmedel', 'nyregunder']
 ```
 
 ## Next Steps
