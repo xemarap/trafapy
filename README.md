@@ -69,12 +69,14 @@ df = trafa.get_data_as_dataframe(product_code, query)
 - **Automated Value Fetching**: Use `'all'` to get all available options
 - **DataFrame Integration**: Direct conversion to pandas DataFrames
 - **Query Preview**: Inspect API calls before execution
+- **Automatic Batching**: Handle large queries seamlessly with smart batching
 
 ### 🚀 **Performance & Reliability**
 - **Smart Caching**: Automatic response caching with configurable expiry
+- **Intelligent Batching**: Automatic splitting of large queries to avoid API limits
+- **Rate Limiting**: Built-in and configurable protection against API limits
 - **Error Handling**: Robust error management and fallback options
 - **Debug Mode**: Detailed logging for troubleshooting
-- **Rate Limiting**: Built-in and configurable protection against API limits
 
 ### 🛠️ **Developer Experience**
 - **Type Hints**: Full type annotation support
@@ -159,6 +161,64 @@ query = trafa.build_query(
 df = trafa.get_data_as_dataframe("t10026", query)
 ```
 
+### Large Dataset Handling with Automatic Batching
+
+TrafaPy automatically handles large queries that would otherwise fail due to URL length limits by intelligently splitting them into smaller batches.
+
+```python
+# Large query example - this will be automatically batched
+query = trafa.build_query(
+    product_code="t10026",
+    ar='all',                        # All available years (20+ values)
+    regkom=stockholm_munis,          # All Stockholm municipalities (50+ values)
+    drivmedel='all',                 # All fuel types (10+ values)
+    nyregunder=''
+)
+
+# TrafaPy automatically detects this is a large query and handles batching
+df = trafa.get_data_as_dataframe("t10026", query, show_progress=True)
+```
+
+**Example output:**
+```
+📊 Large query detected - retrieving data in 3 batches...
+  📋 Batching variable 'regkom' (52 values)
+  ✅ Created 3 batches (max 50 values per variable)
+  🔄 Processing batch 1/3... ✅ 1,250 rows
+  🔄 Processing batch 2/3... ✅ 987 rows  
+  🔄 Processing batch 3/3... ✅ 423 rows
+  🔗 Combining data from 3 successful batches... ✅
+✅ Batch processing complete! Retrieved 2,660 total rows
+```
+
+#### Batching Configuration
+
+```python
+# Configure batching behavior
+trafa.configure_batching(max_batch_size=100)  # Increase batch size
+
+# Check current batching settings
+batch_info = trafa.get_batching_info()
+print(f"Max batch size: {batch_info['max_batch_size']}")
+
+# Disable batching (not recommended for large queries)
+df = trafa.get_data_as_dataframe(product_code, query, use_batching=False)
+```
+
+#### When Batching Activates
+
+Batching automatically activates when:
+- Any variable has more than 50 values (default `max_batch_size`)
+- The resulting URL would exceed typical length limits
+- Multiple large variables are combined in a single query
+
+**How it works:**
+1. **Detection**: TrafaPy identifies variables with too many values
+2. **Smart Splitting**: The largest variable is split into manageable chunks
+3. **Parallel Processing**: Each batch is processed with rate limiting
+4. **Automatic Merging**: Results are combined and deduplicated
+5. **Progress Tracking**: Real-time progress updates during processing
+
 ### Error handling
 
 ```python
@@ -176,7 +236,6 @@ except Exception as e:
     print("Available variables:", variables['name'].tolist())
 ```
 
-
 ## Responsible API use
 
 TrafaPy follows Trafikanalys guidelines for responsible API usage. Trafikanalys strongly recommends using caching to reduce unnecessary API load.
@@ -191,6 +250,7 @@ trafa = TrafikanalysClient(
     calls_per_second=1.0,      # Balanced rate
     burst_size=5,              # Allow interactive bursts
     enable_retry=True,         # Handle errors gracefully
+    max_batch_size=50,         # Reasonable batch size
     debug=False                # Clean logs in production
 )
 ```
@@ -215,7 +275,6 @@ deleted_count = trafa.clear_cache(older_than_seconds=3600)  # Clear files older 
 ### Rate Limiting
 
 TrafaPy includes built-in rate limiting to protect the Trafikanalys API from overload and ensure reliable access for all users.
-
 
 #### Configure Rate Limiting
 
@@ -246,6 +305,13 @@ trafa.configure_rate_limiting(enabled=False)
 | `burst_size` | Quick calls allowed | `3-10` for responsive interaction |
 | `enable_retry` | Automatic retry on errors | `True` (recommended) |
 
+### Batching Configuration
+
+| Setting | Description | Recommended Values |
+|---------|-------------|-------------------|
+| `max_batch_size` | Max values per variable in single request | `25-100` depending on query complexity |
+| `use_batching` | Enable automatic batching | `True` (recommended) |
+| `show_progress` | Display batch progress | `True` for interactive use |
 
 ## API Reference
 

@@ -112,10 +112,6 @@ print(df.head())
 ### Get All Available Values
 
 ```python
-# Get all available years automatically
-all_years = trafa.get_all_available_values(product_code, "ar")
-print(f"Available years: {all_years}")
-
 # Get all municipalities in Stockholm County
 stockholm_municipalities = [
     mun for mun in trafa.get_all_available_values(product_code, "regkom") 
@@ -124,7 +120,72 @@ stockholm_municipalities = [
 print(f"Stockholm municipalities: {stockholm_municipalities[:5]}...")  # Show first 5
 ```
 
-## Step 4: Cache Management
+## Step 4: Working with Large Datasets
+
+### Understanding Automatic Batching
+
+When you request a lot of data (many years, municipalities, or other variables), Trafapy automatically splits your query into smaller batches to avoid API limits. This happens transparently!
+
+```python
+# This query would be VERY large - Trafapy handles it automatically
+large_query = trafa.build_query(
+    product_code,
+    ar='all',           # All available years
+    reglan='all',       # All counties
+    regkom='all',       # All municipalities (290+ values)  
+    drivmedel='all',    # All fuel types (10+ values)
+    nyregunder=''
+)
+
+# Trafapy automatically detects this is large and uses batching
+print("🔍 Running large query with automatic batching...")
+df = trafa.get_data_as_dataframe(product_code, large_query)
+print(f"✅ Successfully retrieved {len(df):,} rows!")
+```
+
+**What you'll see:**
+```
+📊 Large query detected - retrieving data in 3 batches...
+  📋 Batching variable 'regkom' (52 values)
+  ✅ Created 3 batches (max 50 values per variable)
+  🔄 Processing batch 1/3... ✅ 1,250 rows
+  🔄 Processing batch 2/3... ✅ 987 rows  
+  🔄 Processing batch 3/3... ✅ 423 rows
+  🔗 Combining data from 3 successful batches... ✅
+✅ Batch processing complete! Retrieved 2,660 total rows
+```
+
+### Controlling Batching Behavior
+
+```python
+# Configure batch size (how many values per variable in each batch)
+trafa.configure_batching(max_batch_size=25)  # Smaller batches
+
+# Check current settings
+batch_info = trafa.get_batching_info()
+print(f"Current max batch size: {batch_info['max_batch_size']}")
+
+# Control progress messages
+df = trafa.get_data_as_dataframe(product_code, query, show_progress=False)  # Quiet mode
+
+# Disable batching entirely (not recommended for large queries)
+df = trafa.get_data_as_dataframe(product_code, query, use_batching=False)
+```
+
+### When Does Batching Activate?
+
+Batching automatically activates when any variable has more than 50 values (default). For example:
+
+```python
+# This will trigger batching:
+query1 = trafa.build_query(product_code, regkom='all')  # All municipalities (290+ values)  
+
+# These will NOT trigger batching:
+query2 = trafa.build_query(product_code, ar=['2020', '2021', '2022'])  # Only 3 years
+query3 = trafa.build_query(product_code, drivmedel='all')  # Only ~10 fuel types
+```
+
+## Step 5: Cache Management
 
 ```python
 # Check cache status
@@ -136,7 +197,6 @@ print(f"Cache size: {cache_info['total_size_mb']} MB")
 deleted = trafa.clear_cache(older_than_seconds=3600)
 print(f"Deleted {deleted} cache files")
 ```
-
 
 ## Tips and Best Practices
 
@@ -159,8 +219,39 @@ When exploring new data, start with a small subset:
 query = trafa.build_query(product_code, ar=['2023'], reglan=['01'])
 ```
 
-### 4. Handle Large Datasets
-For large queries, consider chunking by year or region.
+### 4. Let Batching Handle Large Datasets
+Don't worry about query size - let Trafapy's automatic batching handle it:
+
+```python
+# ✅ GOOD: Let Trafapy handle the complexity
+query = trafa.build_query(
+    product_code,
+    ar='all',               # Let batching handle this
+    regkom='all',           # And this
+    drivmedel='all'         # And this too!
+)
+df = trafa.get_data_as_dataframe(product_code, query)
+```
+
+### 5. Monitor Progress for Large Queries
+Enable progress messages for large datasets:
+```python
+# See what's happening during batch processing
+df = trafa.get_data_as_dataframe(product_code, query, show_progress=True)
+```
+
+### 6. Adjust Batch Size Based on Your Needs
+
+```python
+# For complex queries with many variables, use smaller batches
+trafa.configure_batching(max_batch_size=25)
+
+# For simple queries, you can use larger batches  
+trafa.configure_batching(max_batch_size=100)
+
+# For very slow connections, use smaller batches
+trafa.configure_batching(max_batch_size=10)
+```
 
 ### Rate Limiting
 
@@ -195,8 +286,7 @@ trafa.configure_rate_limiting(enabled=False)
 | `burst_size` | Quick calls allowed | `3-10` for responsive interaction |
 | `enable_retry` | Automatic retry on errors | `True` (recommended) |
 
-
-### 5. Explore Before Querying
+### 7. Explore Before Querying
 For a list with possible API calls and structures for each dataproduct, please visit [Trafikanalys API Documentation](https://www.trafa.se/sidor/api-dokumentation/)
 
 Always explore variables and options first:
@@ -208,10 +298,53 @@ Always explore variables and options first:
 # 5. Fetch data
 ```
 
-### 6. Use Debug Mode When Stuck
+### 8. Use Debug Mode When Stuck
 Enable debug mode to understand what's happening:
 ```python
 trafa = TrafikanalysClient(debug=True)
+```
+
+You'll see detailed information about:
+- API requests being made
+- Batching decisions and progress
+- Rate limiting delays
+- Cache hits and misses
+
+## Real-World Example: Comprehensive Analysis
+
+Here's a complete example showing how to analyze electric vehicle adoption across Sweden:
+
+```python
+# Initialize client with best practices
+trafa = TrafikanalysClient(
+    cache_enabled=True,
+    rate_limit_enabled=True,
+    debug=False  # Set to True if you want to see what's happening
+)
+
+# Analyze electric vehicle registrations
+product_code = "t10026"
+
+# Build a comprehensive query
+ev_query = trafa.build_query(
+    product_code,
+    ar='all',                   # All available years
+    drivmedel=['103'],          # Electric vehicles only
+    reglan='all',               # All counties
+    regkom='all',               # All municipalities
+    nyregunder=''               # New registrations
+)
+
+print("🔍 Analyzing electric vehicle registrations across Sweden...")
+print("⚡ This is a large query - automatic batching will be used")
+
+# Get the data (batching happens automatically)
+df = trafa.get_data_as_dataframe(product_code, ev_query, show_progress=True)
+
+print(f"\n📊 Analysis complete!")
+print(f"Retrieved {len(df):,} records of electric vehicle registrations")
+print(f"Years covered: {sorted(df['ar'].unique())}")
+print(f"Counties covered: {len(df['reglan'].unique())}")
 ```
 
 ## Common Product Codes
@@ -266,6 +399,7 @@ What does debug show?
 - Response structure details
 - Number of rows/columns received
 - Rate limiting delays
+- Batching decisions and progress
 
 Sample debug output:
 ```html
@@ -274,10 +408,26 @@ Got 45 products from API
 Making request to: https://api.trafa.se/api/structure?query=t10026&lang=sv
 API response structure: ['StructureItems', 'DataCount', 'ValidatedRequestType']
 Found product: Personbilar
-Processing 25 rows
-Processed 25 rows
-Columns in first row: ['ar', 'reglan', 'drivmedel', 'nyregunder']
+📊 Large query detected - retrieving data in 2 batches...
+  📋 Batching variable 'regkom' (52 values)
+Rate limiting: waiting 1.00 seconds
+Making request to: https://api.trafa.se/api/data?query=t10026|ar:2023|regkom:0114,0115,0117&lang=sv
+Got 150 rows from API
+Processing 150 rows
+Processed 150 rows
 ```
+
+## Summary: Trafapy Makes Large Queries Easy
+
+**The key takeaway**: Don't worry about query complexity or size. Trafapy's automatic batching means you can:
+
+- ✅ Request `'all'` for any variable
+- ✅ Combine multiple large variables
+- ✅ Get comprehensive datasets without manual chunking
+- ✅ See progress in real-time
+- ✅ Trust that results are complete and deduplicated
+
+Focus on your analysis, not API limitations!
 
 ## Next Steps
 

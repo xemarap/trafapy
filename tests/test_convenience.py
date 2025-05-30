@@ -64,7 +64,7 @@ class TestAdvancedQueryBuilding:
             
             query_dict = self.client.build_query(
                 "t10016",
-                ar="all_years"
+                ar="all"
             )
             
             assert query_dict["ar"] == ["2020", "2021", "2022"]
@@ -534,15 +534,24 @@ class TestErrorScenarios:
                 self.client._make_request("https://api.trafa.se/api/structure", {})
     
     def test_api_rate_limiting_simulation(self):
-        """Test handling of API rate limiting."""
+        """Test handling of API rate limiting with retry logic."""
+        import requests
+        
         with patch('requests.Session.get') as mock_get:
-            mock_response = Mock()
-            mock_response.status_code = 429  # Too Many Requests
-            mock_response.text = "Rate limit exceeded"
-            mock_get.return_value = mock_response
-            
-            result = self.client._make_request("https://api.trafa.se/api/structure", {})
-            assert result == {}  # Should return empty dict on error
+            with patch('time.sleep') as mock_sleep:  # Speed up the test
+                # All requests return 429 (rate limited)
+                mock_response = Mock()
+                mock_response.status_code = 429
+                mock_response.text = "Rate limit exceeded"
+                mock_get.return_value = mock_response
+                
+                # Should exhaust retries and raise an exception
+                with pytest.raises(requests.exceptions.RequestException):
+                    self.client._make_request("https://api.trafa.se/api/structure", {})
+                
+                # Verify that retries were attempted
+                assert mock_get.call_count > 1  # Should have retried
+                assert mock_sleep.call_count > 0  # Should have waited between retries
     
     def test_corrupted_cache_file(self):
         """Test handling of corrupted cache files."""

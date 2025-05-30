@@ -4,6 +4,8 @@ import logging
 import time
 from typing import Dict, List, Union, Optional, Any
 from functools import wraps
+from itertools import product
+import math
 
 from .cache_utils import APICache, cached_api_request, DEFAULT_CACHE_DIR
 
@@ -144,7 +146,7 @@ class RateLimiter:
 class TrafikanalysClient:
     """
     Simplified client for the Trafikanalys API focused on retrieving data using known queries.
-    Includes rate limiting capabilities.
+    Includes rate limiting capabilities and automatic batching for large queries.
     """
     
     BASE_URL = "https://api.trafa.se/api"
@@ -153,7 +155,8 @@ class TrafikanalysClient:
                  cache_enabled: bool = False, cache_dir: str = DEFAULT_CACHE_DIR,
                  cache_expiry_seconds: int = 1800,  # Default: 30 minutes
                  rate_limit_enabled: bool = True, calls_per_second: float = 1.0,
-                 burst_size: int = 5, enable_retry: bool = True):
+                 burst_size: int = 5, enable_retry: bool = True,
+                 max_batch_size: int = 50):
         """
         Initialize the client.
         
@@ -167,10 +170,12 @@ class TrafikanalysClient:
             calls_per_second: Maximum API calls per second
             burst_size: Number of calls allowed in a burst
             enable_retry: Whether to enable automatic retries with backoff
+            max_batch_size: Maximum number of values per variable in a single request
         """
         self.language = language
         self.debug = debug
         self.session = requests.Session()
+        self.max_batch_size = max_batch_size
         self.cache = APICache(
             cache_dir=cache_dir,
             expiry_seconds=cache_expiry_seconds,
@@ -259,6 +264,17 @@ class TrafikanalysClient:
             if self.debug:
                 print("Rate limiting disabled")
     
+    def configure_batching(self, max_batch_size: int = 50):
+        """
+        Configure batching settings.
+        
+        Args:
+            max_batch_size: Maximum number of values per variable in a single request
+        """
+        self.max_batch_size = max_batch_size
+        if self.debug:
+            print(f"Batching configured: max {max_batch_size} values per variable")
+    
     def get_rate_limit_info(self) -> Dict[str, Any]:
         """
         Get current rate limiting configuration.
@@ -281,6 +297,17 @@ class TrafikanalysClient:
             "recent_calls": len(self.rate_limiter.call_times),
             "backoff_factor": self.rate_limiter.backoff_factor,
             "max_retries": self.rate_limiter.max_retries
+        }
+    
+    def get_batching_info(self) -> Dict[str, Any]:
+        """
+        Get current batching configuration.
+        
+        Returns:
+            Dictionary with batching information
+        """
+        return {
+            "max_batch_size": self.max_batch_size
         }
      
     def list_products(self) -> pd.DataFrame:
@@ -373,6 +400,83 @@ class TrafikanalysClient:
                 query_parts.append(var_name)
         
         return "|".join(query_parts)
+    
+    def _needs_batching(self, variables: Dict[str, Union[str, List[str]]]) -> bool:
+        """
+        Check if a query needs batching based on the number of values per variable.
+        
+        Args:
+            variables: Dictionary of variables and values
+            
+        Returns:
+            True if batching is needed, False otherwise
+        """
+        # Check if any variable has more values than max_batch_size
+        for var_name, var_values in variables.items():
+            if isinstance(var_values, list) and len(var_values) > self.max_batch_size:
+                return True
+                
+        return False
+    
+    def _create_batches(self, variables: Dict[str, Union[str, List[str]]], 
+                       show_progress: bool = None) -> List[Dict[str, Union[str, List[str]]]]:
+        """
+        Create batches from variables to avoid URL length limits by splitting variables 
+        that have more than max_batch_size values.
+        
+        Args:
+            variables: Dictionary of variables and values
+            show_progress: Whether to show progress (defaults to debug mode setting)
+            
+        Returns:
+            List of variable dictionaries for batched requests
+        """
+        if show_progress is None:
+            show_progress = self.debug
+            
+        # Find variables that need batching (have more than max_batch_size values)
+        variables_to_batch = []
+        for var_name, var_values in variables.items():
+            if isinstance(var_values, list) and len(var_values) > self.max_batch_size:
+                variables_to_batch.append((var_name, len(var_values)))
+        
+        if not variables_to_batch:
+            return [variables]
+        
+        # Sort by size (largest first) to batch the most problematic variable
+        variables_to_batch.sort(key=lambda x: x[1], reverse=True)
+        batch_var_name, batch_var_size = variables_to_batch[0]
+        
+        if show_progress:
+            print(f"  📋 Batching variable '{batch_var_name}' ({batch_var_size} values)")
+            if len(variables_to_batch) > 1:
+                other_vars = [f"{name}({size})" for name, size in variables_to_batch[1:]]
+                print(f"  ℹ️  Other large variables will be included in all batches: {', '.join(other_vars)}")
+        
+        # Create batches by splitting the largest variable
+        batch_values = variables[batch_var_name]
+        batches = []
+        
+        for i in range(0, len(batch_values), self.max_batch_size):
+            batch_vars = variables.copy()
+            batch_vars[batch_var_name] = batch_values[i:i + self.max_batch_size]
+            batches.append(batch_vars)
+        
+        if show_progress and batches:
+            print(f"  ✅ Created {len(batches)} batches (max {self.max_batch_size} values per variable)")
+            
+            # Show sample of first batch
+            if len(batches) > 0:
+                first_batch = batches[0]
+                batch_summary = []
+                for k, v in first_batch.items():
+                    if isinstance(v, list):
+                        batch_summary.append(f"{k}({len(v)})")
+                    else:
+                        batch_summary.append(f"{k}")
+                print(f"  📊 Example batch structure: {', '.join(batch_summary)}")
+        
+        return batches if batches else [variables]
     
     def _get_data(self, query: str) -> Dict[str, Any]:
         """
@@ -506,24 +610,109 @@ class TrafikanalysClient:
         
         return pd.DataFrame(processed_rows)
     
-    def get_data_as_dataframe(self, product_code: str, variables: Dict[str, Union[str, List[str]]]) -> pd.DataFrame:
+    def get_data_as_dataframe(self, product_code: str, variables: Dict[str, Union[str, List[str]]], 
+                            use_batching: bool = True, show_progress: bool = True) -> pd.DataFrame:
         """
-        Get data from the API as a DataFrame.
+        Get data from the API as a DataFrame with automatic batching for large queries.
         
         Args:
             product_code: The product code (e.g., "t10016")
             variables: Dictionary of variables and values (e.g., {"ar": ["2020", "2021"]})
+            use_batching: Whether to use automatic batching for large queries
+            show_progress: Whether to show progress messages (True by default, can be overridden by debug mode)
             
         Returns:
             DataFrame with the data
         """
-        query = self._build_query(product_code, variables)
+        if use_batching and self._needs_batching(variables):
+            batches = self._create_batches(variables, show_progress=(show_progress or self.debug))
+            
+            # Show initial batching message
+            if show_progress or self.debug:
+                print(f"📊 Large query detected - retrieving data in {len(batches)} batches...")
+            
+            all_dataframes = []
+            total_rows = 0
+            
+            for i, batch_vars in enumerate(batches):
+                batch_num = i + 1
+                
+                # Show progress for each batch
+                if show_progress or self.debug:
+                    print(f"  🔄 Processing batch {batch_num}/{len(batches)}...", end="")
+                
+                try:
+                    query = self._build_query(product_code, batch_vars)
+                    data = self._get_data(query)
+                    df = self._data_to_dataframe(data)
+                    
+                    if not df.empty:
+                        all_dataframes.append(df)
+                        batch_rows = len(df)
+                        total_rows += batch_rows
+                        
+                        if show_progress or self.debug:
+                            print(f" ✅ {batch_rows:,} rows")
+                    else:
+                        if show_progress or self.debug:
+                            print(" ⚠️  No data")
+                        elif self.debug:
+                            print(f"Batch {batch_num} returned no data")
+                            
+                except Exception as e:
+                    if show_progress or self.debug:
+                        print(f" ❌ Error: {str(e)[:50]}...")
+                    elif self.debug:
+                        print(f"Batch {batch_num} failed: {e}")
+                    continue
+            
+            if not all_dataframes:
+                if show_progress or self.debug:
+                    print("❌ No data returned from any batch")
+                return pd.DataFrame()
+            
+            # Combine all dataframes
+            if show_progress or self.debug:
+                print(f"  🔗 Combining data from {len(all_dataframes)} successful batches...", end="")
+            
+            result_df = pd.concat(all_dataframes, ignore_index=True)
+            
+            # Remove duplicates that might occur due to overlapping batches
+            initial_rows = len(result_df)
+            result_df = result_df.drop_duplicates()
+            final_rows = len(result_df)
+            
+            # Show completion message
+            if show_progress or self.debug:
+                print(f" ✅")
+                if initial_rows != final_rows:
+                    print(f"  🧹 Removed {initial_rows - final_rows:,} duplicate rows")
+                print(f"✅ Batch processing complete! Retrieved {final_rows:,} total rows")
+            elif self.debug:
+                print(f"Combined {len(batches)} batches into {final_rows} total rows")
+            
+            return result_df
         
-        if self.debug:
-            print(f"Query: {query}")
-        
-        data = self._get_data(query)
-        return self._data_to_dataframe(data)
+        else:
+            # Standard single request
+            if show_progress and not self.debug:
+                print("📊 Retrieving data...", end="")
+            
+            query = self._build_query(product_code, variables)
+            
+            if self.debug:
+                print(f"Query: {query}")
+            
+            data = self._get_data(query)
+            result_df = self._data_to_dataframe(data)
+            
+            if show_progress and not self.debug:
+                if not result_df.empty:
+                    print(f" ✅ {len(result_df):,} rows")
+                else:
+                    print(" ⚠️  No data found")
+            
+            return result_df
     
     def clear_cache(self, older_than_seconds: Optional[int] = None) -> int:
         """
@@ -769,6 +958,11 @@ class TrafikanalysClient:
         
         print(f"\nAPI Query Preview:")
         print(f"https://api.trafa.se/api/data?query={query}")
+        
+        # Check if batching would be needed
+        if self._needs_batching(query_dict):
+            batches = self._create_batches(query_dict)
+            print(f"\nNote: This query will be split into {len(batches)} batches due to size")
         
         return query
     
