@@ -6,8 +6,8 @@ This document provides comprehensive information about testing the TrafaPy libra
 
 TrafaPy has a comprehensive test suite that includes:
 
-- **Unit Tests**: Test individual components in isolation using mocks (53+ tests)
-- **Rate Limiting Tests**: Test API rate limiting and retry mechanisms (26 tests)
+- **Unit Tests**: Test individual components in isolation using mocks 
+- **Rate Limiting Tests**: Test API rate limiting and retry mechanisms
 - **Integration Tests**: Test real API interactions (use sparingly)
 - **Performance Tests**: Test caching and performance optimizations
 - **Error Handling Tests**: Test edge cases and error scenarios
@@ -19,10 +19,11 @@ TrafaPy has a comprehensive test suite that includes:
 tests/
 ├── __init__.py                 # Makes tests a Python package
 ├── conftest.py                 # Shared test fixtures and configuration
-├── test_trafapy.py            # Core functionality tests (25 tests)
-├── test_convenience.py         # Advanced features tests (28 tests)
-├── test_rate_limiting.py       # Rate limiting functionality tests (26 tests)
-└── run_tests.py               # Custom test runner script
+├── test_trafapy.py             # Core functionality tests
+├── test_convenience.py         # Advanced features tests 
+├── test_rate_limiting.py       # Rate limiting functionality tests 
+├── test_batching.py            # Batching mechanism functionality tests 
+└── run_tests.py                # Custom test runner script
 ```
 
 ## 🚀 Quick Start
@@ -74,6 +75,7 @@ pytest -k "cache" -v              # Cache-related tests
 pytest -k "client" -v             # Client functionality tests
 pytest -k "query" -v              # Query building tests
 pytest -k "rate_limit" -v         # Rate limiting tests
+pytest -k "batching" -v           # Batching tests
 pytest tests/test_rate_limiting.py -v  # All rate limiting tests
 
 # Run specific rate limiting test classes
@@ -83,6 +85,7 @@ pytest tests/test_rate_limiting.py::TestTrafikanalysClientRateLimiting -v
 
 **What they test:**
 - Query building logic and parameter handling
+- Batching mechanism tests
 - Data processing and DataFrame conversion
 - Cache functionality (save, retrieve, expire)
 - Rate limiting and retry mechanisms
