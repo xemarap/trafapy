@@ -353,7 +353,7 @@ All dependency licenses are available in the `LICENSES/` directory.
 ## Links
 
 - **Official API Documentation**: [Trafikanalys Open Data API](https://www.trafa.se/sidor/oppen-data-api/)
-- **Data Catalog**: [Trafikanalys Statistics](https://www.trafa.se/statistik/)
+- **Data Catalog**: [Trafikanalys Statistics](https://www.trafa.se/sidor/statistikportalen/)
 - **GitHub Repository**: [TrafaPy on GitHub](https://github.com/xemarap/trafapy)
 
 ---
