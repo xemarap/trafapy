@@ -1,3 +1,9 @@
+
+<picture align="center">
+  <source media="(prefers-color-scheme: dark)" srcset="images/trafapy_dark.png">
+  <img alt="Logo" src="images/trafapy_light.png">
+</picture>
+
 # TrafaPy: Swedish Transport Statistics API Wrapper
 
 A comprehensive Python package for accessing and analyzing Swedish transport statistics through the Trafikanalys API.
