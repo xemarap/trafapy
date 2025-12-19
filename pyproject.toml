@@ -1,45 +1,39 @@
-# pyproject.toml - Modern Python project configuration
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "trafapy"
 version = "1.0.0"
+authors = [
+    {name = "Emanuel Raptis", email = "emanuelraptis@gmail.com"},
+]
 description = "A Python wrapper for the Trafikanalys API"
 readme = "README.md"
-license = {text = "MIT"}
-authors = [
-    {name = "Emanuel Raptis"},
-]
+requires-python = ">=3.7"
+license = {file = "LICENSE.md"}
 classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
-    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 keywords = ["trafikanalys", "api", "statistics", "sweden", "transport", "traffic"]
 dependencies = [
     "requests>=2.25.0",
-    "pandas>=1.0.0",
+    "pandas>=1.0.0"
 ]
-requires-python = ">=3.7"
 
 [project.optional-dependencies]
-test = [
-    "pytest>=6.0",
-    "pytest-cov>=2.0",
-    "pytest-mock>=3.0",
-    
-]
 dev = [
     "pytest>=6.0",
     "pytest-cov>=2.0",
@@ -48,93 +42,14 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/xemarap/trafapy"
-Documentation = "https://github.com/xemarap/trafapy"
+Documentation = "https://github.com/xemarap/trafapy/blob/main/README.md"
 Repository = "https://github.com/xemarap/trafapy"
 "Bug Tracker" = "https://github.com/xemarap/trafapy/issues"
 
-[tool.pytest.ini_options]
-minversion = "6.0"
-addopts = [
-    "-ra",
-    "-q",
-    "--strict-markers",
-    "--strict-config",
-    "--cov=trafapy",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-report=xml",
-]
-testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-markers = [
-    "integration: marks tests as integration tests (may hit real API)",
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "unit: marks tests as unit tests",
-]
-filterwarnings = [
-    "ignore::UserWarning",
-    "ignore::DeprecationWarning",
-]
+[tool.setuptools]
+license-files = ["LICENSE.md"]
 
-[tool.coverage.run]
-source = ["trafapy"]
-omit = [
-    "*/tests/*",
-    "*/test_*",
-    "setup.py",
-]
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "if self.debug:",
-    "if settings.DEBUG",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if 0:",
-    "if __name__ == .__main__.:",
-    "class .*\\bProtocol\\):",
-    "@(abc\\.)?abstractmethod",
-]
-
-[tool.black]
-line-length = 88
-target-version = ['py37', 'py38', 'py39', 'py310', 'py311']
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.git
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
-
-[tool.mypy]
-python_version = "3.7"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_untyped_decorators = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = true
-strict_equality = true
-
-[[tool.mypy.overrides]]
-module = [
-    "pandas.*",
-    "requests.*",
-]
-ignore_missing_imports = true
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["trafapy*"]
+exclude = ["tests*"]

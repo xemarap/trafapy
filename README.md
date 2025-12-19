@@ -20,7 +20,7 @@ TrafaPy provides an intuitive interface to explore and retrieve data from Sweden
 ## Installation
 
 ```bash
-pip install git+https://github.com/xemarap/trafapy.git
+pip install trafapy
 ```
 
 ## Requirements
